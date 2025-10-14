@@ -3,12 +3,13 @@ package com.shomuran.cardscope.model;
 import jakarta.persistence.Embeddable;
 
 @Embeddable
-public class UserCard {
+public class UserCard extends AuditableEntity {
 
     private String issuer;
     private String cardProduct;
 
-    public UserCard() {}
+    public UserCard() {
+    }
 
     public UserCard(String issuer, String cardProduct) {
         this.issuer = issuer;
@@ -18,6 +19,7 @@ public class UserCard {
     public String getIssuer() {
         return issuer;
     }
+
     public void setIssuer(String issuer) {
         this.issuer = issuer;
     }
@@ -25,6 +27,7 @@ public class UserCard {
     public String getCardProduct() {
         return cardProduct;
     }
+
     public void setCardProduct(String cardProduct) {
         this.cardProduct = cardProduct;
     }

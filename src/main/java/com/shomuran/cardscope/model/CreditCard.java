@@ -17,7 +17,7 @@ import lombok.Setter;
 )
 @Getter
 @Setter
-public class CreditCard {
+public class CreditCard extends AuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
