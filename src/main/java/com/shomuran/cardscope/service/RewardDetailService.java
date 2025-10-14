@@ -5,13 +5,15 @@ import com.shomuran.cardscope.config.PromptLoader;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.*;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class RewardDetailService {
@@ -28,29 +30,24 @@ public class RewardDetailService {
     private final OkHttpClient httpClient = new OkHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
 
-
+    /**
+     * Synchronous OpenAI call
+     */
     public Map<?, ?> getRewardDetails(String cardName) {
         try {
-            //String cardName = (String) payload.get("card_name");
-
-            // Load base system prompt
             String basePrompt = promptLoader.getCardRewardPrompt();
+            String userPrompt = "The user has these cards: " + cardName;
 
-            // Build dynamic user context
-            String userPrompt = "The user has these cards: " + String.join(", ", cardName);
-
-            // Build request payload for Responses API
             Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("model", "gpt-5-mini"); // or gpt-4o
-            requestBody.put("tools", List.of(Map.of("type", "web_search_preview"))); // enable web search
+            requestBody.put("model", "gpt-5-mini");
+            requestBody.put("tools", List.of(Map.of("type", "web_search_preview")));
             requestBody.put("input", List.of(
                     Map.of("role", "system", "content", basePrompt),
                     Map.of("role", "user", "content", userPrompt)
             ));
 
-            // ✅ Explicitly use okhttp3.RequestBody
-            okhttp3.RequestBody body = okhttp3.RequestBody.create(
-                    okhttp3.MediaType.parse("application/json"),
+            RequestBody body = RequestBody.create(
+                    MediaType.parse("application/json"),
                     mapper.writeValueAsString(requestBody)
             );
 
@@ -66,19 +63,15 @@ public class RewardDetailService {
                 if (!response.isSuccessful()) {
                     return Map.of("error", "OpenAI API call failed: " + response.message());
                 }
+
                 String bodyString = response.body().string();
+                Map<String, Object> bodyMap = mapper.readValue(bodyString, new TypeReference<>() {});
 
-                // Parse full API response into a map
-                Map<String, Object> bodyMap = mapper.readValue(bodyString, new TypeReference<Map<String, Object>>() {
-                });
-
-                // The "output" array contains assistant messages
                 List<Map<String, Object>> outputs = (List<Map<String, Object>>) bodyMap.get("output");
                 if (outputs == null || outputs.isEmpty()) {
                     return Map.of("error", "No output from model");
                 }
 
-                // ✅ Scan all outputs for first "output_text"
                 responseText = null;
                 for (Map<String, Object> outputItem : outputs) {
                     List<Map<String, Object>> contentList = (List<Map<String, Object>>) outputItem.get("content");
@@ -92,35 +85,69 @@ public class RewardDetailService {
                     }
                     if (responseText != null) break;
                 }
+
                 if (responseText == null) {
                     return Map.of("error", "No output_text from model");
                 }
             }
 
-            // ✅ Cleanup: strip markdown fences if present
             responseText = responseText.trim();
             if (responseText.startsWith("```")) {
                 responseText = responseText.replaceAll("```(json)?", "").trim();
             }
-            //responseText = responseText.replaceAll("```", "").trim();
 
-            System.out.println(responseText);
-            // Parse GPT JSON into Map
-            Map<String, Object> parsedResponse = mapper.readValue(responseText, new TypeReference<Map<String, Object>>() {
-            });
-            Map<String, Object> parsedRewards = (Map<String, Object>) parsedResponse.get("cardReward");
+            Map<String, Object> parsedResponse =
+                    mapper.readValue(responseText, new TypeReference<>() {});
+            Map<String, Object> parsedRewards =
+                    (Map<String, Object>) parsedResponse.get("cardReward");
 
-            // Build response
-            Map<String, Object> responseMap = Map.of(
-                    "cardReward", parsedRewards
-            );
-            return responseMap;
+            return Map.of("cardReward", parsedRewards);
+
         } catch (IOException e) {
             e.printStackTrace();
-            return Map.of("error", "OpenAI API I/O error: " + e.getMessage());
+            return Map.of("error", "OpenAI API I/O error: timeout"); // standardize timeout error
         } catch (Exception e) {
             e.printStackTrace();
             return Map.of("error", "Error generating suggestions: " + e.getMessage());
         }
+    }
+
+    /**
+     * ✅ Async version with retry mechanism (non-blocking)
+     */
+    @Async("cardScopeExecutor")
+    public CompletableFuture<Map<?, ?>> getRewardDetailsAsync(String cardName) {
+        return CompletableFuture.supplyAsync(() -> {
+            int maxRetries = 3;
+            int attempt = 0;
+
+            while (attempt < maxRetries) {
+                attempt++;
+                Map<?, ?> result = getRewardDetails(cardName);
+
+                if (!isTimeoutError(result)) {
+                    return result;
+                }
+
+                System.out.println("⚠️ Timeout on attempt " + attempt +
+                        " for " + cardName + " — retrying...");
+                try {
+                    TimeUnit.SECONDS.sleep(2);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+
+            System.out.println("❌ All retries failed for " + cardName);
+            return Map.of("error", "Failed after " + maxRetries + " retries (timeout)");
+        });
+    }
+
+    /**
+     * Utility: check if result indicates a timeout
+     */
+    private boolean isTimeoutError(Map<?, ?> response) {
+        return response != null && "OpenAI API I/O error: timeout".equals(response.get("error"));
     }
 }

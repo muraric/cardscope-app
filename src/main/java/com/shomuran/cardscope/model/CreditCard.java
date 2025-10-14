@@ -7,8 +7,11 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "credit_card",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"issuer", "card_product"})
+        },
         indexes = {
-                @Index(name = "idx_card_name", columnList = "cardProduct"),
+                @Index(name = "idx_card_name", columnList = "card_product"),
                 @Index(name = "idx_card_issuer", columnList = "issuer")
         }
 )
@@ -20,13 +23,24 @@ public class CreditCard {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-//    @Column(nullable = false)
-    private String issuer; // 🟩 NEW: e.g. "Chase", "American Express"
+    /**
+     * 🏦 The bank or issuer name.
+     * Example: "Chase", "American Express", "Capital One"
+     */
+    @Column(nullable = false)
+    private String issuer;
 
- //   @Column(nullable = false)
-    private String cardProduct; // 🟩 e.g. "Freedom Flex", "Platinum"
+    /**
+     * 💳 The specific card product.
+     * Example: "Freedom Flex", "Platinum", "Venture"
+     */
+    @Column(name = "card_product", nullable = false)
+    private String cardProduct;
 
+    /**
+     * 🪙 Reward details (JSON string).
+     * Example: {"category":"groceries","rewardRate":"5%"}
+     */
     @Column(length = 10000)
-    private String rewardDetails; // JSON details if needed
-
+    private String rewardDetails;
 }
