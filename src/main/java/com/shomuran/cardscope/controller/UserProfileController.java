@@ -71,7 +71,7 @@ public class UserProfileController {
     }
 
     /**
-     * ✅ Updated to make reward details fetch async (non-blocking OpenAI calls).
+     * ✅ Updated PUT mapping to use UPSERT logic for CreditCard.
      */
     @PutMapping("/{email}")
     public ResponseEntity<UserProfileDto> updateUserCards(
@@ -110,27 +110,29 @@ public class UserProfileController {
                                     exists = false;
                                 }
                             }
+
+                            // ✅ Use UPSERT if missing or needs update
                             if (!exists) {
-                                // ✅ Run async: fetch reward details and save CreditCard in background
                                 rewardDetailService.getRewardDetailsAsync(cardName)
                                         .thenAccept(rewardDetails -> {
                                             try {
-                                                String rewardJson =
-                                                        objectMapper.writeValueAsString(rewardDetails);
+                                                String rewardJson = objectMapper.writeValueAsString(rewardDetails);
 
-                                                CreditCard creditCard = new CreditCard();
-                                                creditCard.setIssuer(cardMap.getIssuer());
-                                                creditCard.setCardProduct(cardMap.getCardProduct());
                                                 if (rewardJson != null && rewardJson.trim().startsWith("{\"error\":")) {
-                                                    log.error("❌ Timeout detected! SAVING CARD DETAIL as empty");
-                                                    creditCard.setRewardDetails("{}");
-                                                } else {
-                                                    creditCard.setRewardDetails(rewardJson);
-                                                    log.info("✅ Saved reward details asynchronously for card: {}", cardName);
+                                                    log.error("❌ Timeout detected for {} — saving empty {}", cardName, "{}");
+                                                    rewardJson = "{}";
                                                 }
-                                                creditCardRepository.save(creditCard);
+
+                                                // ✅ PostgreSQL UPSERT (insert or update reward details)
+                                                creditCardRepository.upsertCard(
+                                                        cardMap.getIssuer(),
+                                                        cardMap.getCardProduct(),
+                                                        rewardJson
+                                                );
+
+                                                log.info("✅ Upserted reward details for card: {}", cardName);
                                             } catch (Exception e) {
-                                                log.error("❌ Failed to serialize or save reward details for {}: {}", cardName, e.getMessage());
+                                                log.error("❌ Failed to serialize or upsert reward details for {}: {}", cardName, e.getMessage());
                                             }
                                         })
                                         .exceptionally(ex -> {
@@ -182,7 +184,7 @@ public class UserProfileController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Get profile by email
+    // ✅ Get profile by email (UNCHANGED)
     @GetMapping("/{email}")
     public ResponseEntity<UserProfileDto> getUserByEmail(@PathVariable String email) {
         return userProfileRepository.findByEmail(email)
@@ -218,7 +220,7 @@ public class UserProfileController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // Delete profile
+    // ✅ Delete profile (UNCHANGED)
     @DeleteMapping("/{email}")
     public ResponseEntity<?> deleteByEmail(@PathVariable String email) {
         return userProfileRepository.findByEmail(email)

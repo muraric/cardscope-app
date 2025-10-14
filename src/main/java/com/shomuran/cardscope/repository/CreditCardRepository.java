@@ -2,7 +2,9 @@ package com.shomuran.cardscope.repository;
 
 import com.shomuran.cardscope.model.CreditCard;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +13,6 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
 
     /**
      * 🔹 Find distinct issuers that match a given search term (case-insensitive).
-     * Example: search='ame' → returns ["American Express", "American Credit Union"]
      */
     @Query("SELECT DISTINCT c.issuer FROM CreditCard c " +
             "WHERE LOWER(c.issuer) LIKE LOWER(CONCAT('%', :search, '%'))")
@@ -19,7 +20,6 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
 
     /**
      * 🔹 Find distinct card products for a specific issuer.
-     * Example: issuer='Chase', search='free' → ["Freedom Flex", "Freedom Unlimited"]
      */
     @Query("SELECT DISTINCT c.cardProduct FROM CreditCard c " +
             "WHERE LOWER(c.issuer) = LOWER(:issuer) " +
@@ -35,8 +35,6 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
 
     /**
      * ✅ Find all cards whose rewardDetails are empty ("{}") or NULL.
-     * Uses TRIM + REPLACE to ignore whitespace around braces.
-     * Example: matches "{}", " { } ", or null.
      */
     @Query("""
            SELECT c
@@ -45,4 +43,17 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
               OR REPLACE(TRIM(c.rewardDetails), ' ', '') = '{}'
            """)
     List<CreditCard> findCardsWithEmptyRewards();
+
+    /**
+     * ✅ Native UPSERT for PostgreSQL — insert or update existing (issuer, card_product) record.
+     */
+    @Modifying
+    @Transactional
+    @Query(value = """
+        INSERT INTO credit_card (issuer, card_product, reward_details)
+        VALUES (:issuer, :cardProduct, :rewardDetails)
+        ON CONFLICT (issuer, card_product)
+        DO UPDATE SET reward_details = EXCLUDED.reward_details
+        """, nativeQuery = true)
+    void upsertCard(String issuer, String cardProduct, String rewardDetails);
 }
