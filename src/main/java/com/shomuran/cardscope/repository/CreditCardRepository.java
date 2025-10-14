@@ -27,8 +27,22 @@ public interface CreditCardRepository extends JpaRepository<CreditCard, Long> {
     List<String> findProductsByIssuer(String issuer, String search);
 
     /**
-     * 🔹 Optional: Find a specific card by issuer and product.
+     * 🔹 Find a specific card by issuer and product.
      */
     Optional<CreditCard> findByIssuerIgnoreCaseAndCardProductIgnoreCase(String issuer, String cardProduct);
+
     boolean existsByIssuerIgnoreCaseAndCardProductIgnoreCase(String issuer, String cardProduct);
+
+    /**
+     * ✅ Find all cards whose rewardDetails are empty ("{}") or NULL.
+     * Uses TRIM + REPLACE to ignore whitespace around braces.
+     * Example: matches "{}", " { } ", or null.
+     */
+    @Query("""
+           SELECT c
+           FROM CreditCard c
+           WHERE c.rewardDetails IS NULL
+              OR REPLACE(TRIM(c.rewardDetails), ' ', '') = '{}'
+           """)
+    List<CreditCard> findCardsWithEmptyRewards();
 }
