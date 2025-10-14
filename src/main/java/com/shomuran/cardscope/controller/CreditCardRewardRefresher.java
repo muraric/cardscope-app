@@ -52,18 +52,23 @@ public class CreditCardRewardRefresher {
 
                             if (rewardJson != null && rewardJson.trim().startsWith("{\"error\":")) {
                                 log.error("❌ Timeout/error for {} — saving as empty {{}}", cardName);
-                                card.setRewardDetails("{}");
+                                rewardJson = "{}";
                             } else if (rewardJson != null && rewardJson.replaceAll("\\s+", "").equals("{}")) {
                                 log.warn("⚠️ OpenAI returned empty {{}} for {}.", cardName);
-                                card.setRewardDetails("{}");
-                            } else {
-                                card.setRewardDetails(rewardJson);
-                                log.info("✅ Refreshed reward details for {}", cardName);
+                                rewardJson = "{}";
                             }
 
-                            creditCardRepository.save(card);
+                            // ✅ UPSERT instead of save() — updates if exists, inserts if missing
+                            creditCardRepository.upsertCard(
+                                    card.getIssuer(),
+                                    card.getCardProduct(),
+                                    rewardJson
+                            );
+
+                            log.info("✅ Upserted reward details for {}", cardName);
+
                         } catch (Exception e) {
-                            log.error("❌ Failed to serialize or save reward details for {}: {}", cardName, e.getMessage());
+                            log.error("❌ Failed to serialize or upsert reward details for {}: {}", cardName, e.getMessage());
                         }
                     })
                     .exceptionally(ex -> {
