@@ -27,8 +27,13 @@ public class RewardDetailService {
     @Value("${openai.api.key}")
     private String openAiKey;
 
-    private final OkHttpClient httpClient = new OkHttpClient();
     private final ObjectMapper mapper = new ObjectMapper();
+    OkHttpClient httpClient = new OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)   // default 10s → now 60s
+            .writeTimeout(120, TimeUnit.SECONDS)    // for large prompt uploads
+            .readTimeout(180, TimeUnit.SECONDS)     // for long generation
+            .callTimeout(180, TimeUnit.SECONDS)     // total time allowed for call
+            .build();
 
     /**
      * Synchronous OpenAI call
@@ -65,7 +70,8 @@ public class RewardDetailService {
                 }
 
                 String bodyString = response.body().string();
-                Map<String, Object> bodyMap = mapper.readValue(bodyString, new TypeReference<>() {});
+                Map<String, Object> bodyMap = mapper.readValue(bodyString, new TypeReference<>() {
+                });
 
                 List<Map<String, Object>> outputs = (List<Map<String, Object>>) bodyMap.get("output");
                 if (outputs == null || outputs.isEmpty()) {
@@ -97,7 +103,8 @@ public class RewardDetailService {
             }
 
             Map<String, Object> parsedResponse =
-                    mapper.readValue(responseText, new TypeReference<>() {});
+                    mapper.readValue(responseText, new TypeReference<>() {
+                    });
             Map<String, Object> parsedRewards =
                     (Map<String, Object>) parsedResponse.get("cardReward");
 
