@@ -1,12 +1,16 @@
 package com.shomuran.cardscope.controller;
 
+import com.shomuran.cardscope.model.PasswordResetToken;
 import com.shomuran.cardscope.model.UserProfile;
+import com.shomuran.cardscope.repository.PasswordResetTokenRepository;
 import com.shomuran.cardscope.repository.UserProfileRepository;
+import com.shomuran.cardscope.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
@@ -15,7 +19,10 @@ import java.util.*;
 public class AuthController {
     @Autowired
     private UserProfileRepository userProfileRepository;
-
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
+    @Autowired
+    private UserService userService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @PostMapping("/signup")
@@ -60,4 +67,30 @@ public class AuthController {
                 })
                 .orElseGet(() -> ResponseEntity.status(404).body(Map.of("error", "User not found")));
     }
+    @PostMapping("/reset")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        System.out.println("Reset link sent");
+        userService.sendResetLink(email); // Your email logic
+        return ResponseEntity.ok(Map.of("message", "Reset link sent"));
+    }
+
+    @GetMapping("/reset/{token}")
+    public ResponseEntity<?> verifyToken(@PathVariable String token) {
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid token"));
+        if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            throw new RuntimeException("Token expired");
+        }
+        return ResponseEntity.ok("Token valid");
+    }
+
+    @PostMapping("/reset/confirm")
+    public ResponseEntity<?> confirmReset(@RequestBody Map<String, String> payload) {
+        String token = payload.get("token");
+        String newPassword = payload.get("newPassword");
+        userService.confirmResetPassword(token, newPassword);
+        return ResponseEntity.ok(Map.of("message", "Password reset successful"));
+    }
+
 }
