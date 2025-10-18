@@ -83,6 +83,12 @@
             <version>1.18.42</version> <!-- Use a recent, stable version -->
             <scope>provided</scope>
         </dependency>
+        <!-- ✉️ Spring Boot Starter for sending emails -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>
