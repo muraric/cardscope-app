@@ -10,7 +10,11 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import org.springframework.mail.javamail.MimeMessageHelper;
 
+import java.io.UnsupportedEncodingException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -33,44 +37,75 @@ public class UserService {
     private String frontendUrl;
 
     public void sendResetLink(String email) {
-        // 1️⃣ Check if user exists
         UserProfile user = userProfileRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
 
-        // 2️⃣ Generate token
         String token = UUID.randomUUID().toString();
 
-        // 3️⃣ Save token in DB
         PasswordResetToken resetToken = new PasswordResetToken();
         resetToken.setToken(token);
         resetToken.setUser(user);
         resetToken.setExpiryDate(LocalDateTime.now().plusMinutes(30));
         tokenRepository.save(resetToken);
 
-        // 4️⃣ Create reset link
         String resetLink = frontendUrl + "/reset/" + token;
 
-        // 5️⃣ Send email
-        SimpleMailMessage mailMessage = new SimpleMailMessage();
-        mailMessage.setTo(email);
-        mailMessage.setFrom("noreply@shomuran.com");
-        mailMessage.setSubject("Password Reset Request - CardScope");
-        mailMessage.setText("""
-                Hello %s,
-                
-                We received a password reset request for your CardScope account.
-                Click the link below to reset your password:
-                
-                %s
-                
-                This link will expire in 30 minutes.
-                
-                If you didn’t request this, you can safely ignore this email.
-                
-                — CardScope Support
-                """.formatted(user.getName(), resetLink));
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-        mailSender.send(mailMessage);
+            helper.setTo(email);
+            helper.setFrom("noreply@shomuran.com", "CardScope Support");
+            helper.setSubject("Password Reset Request – CardScope");
+
+            // --- HTML template ---
+            String html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Password Reset</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; background-color: #f5f6fa; margin:0; padding:0;">
+          <table align="center" width="100%%" style="max-width:600px; background:white; border-radius:8px; padding:30px;">
+            <tr>
+              <td style="text-align:center; padding-bottom:20px;">
+                <img src="https://cardscope-web.vercel.app/logo.png" alt="CardScope" height="48" style="margin-bottom:10px;" />
+                <h2 style="color:#1e1e2f; margin:0;">Password Reset Request</h2>
+              </td>
+            </tr>
+            <tr>
+              <td style="color:#333; font-size:15px; line-height:1.6;">
+                <p>Hello %s,</p>
+                <p>We received a password reset request for your CardScope account.</p>
+                <p>If it was you, click the button below to set a new password:</p>
+                <p style="text-align:center; margin:30px 0;">
+                  <a href="%s"
+                     style="background-color:#2563EB; color:white; padding:12px 24px; text-decoration:none; border-radius:6px; font-weight:bold; display:inline-block;">
+                    Reset Password
+                  </a>
+                </p>
+                <p>This link will expire in <b>30 minutes</b>.</p>
+                <p>If you didn’t request this, you can safely ignore this email.</p>
+                <p>Thanks,<br/>The CardScope Team</p>
+              </td>
+            </tr>
+          </table>
+          <p style="text-align:center; font-size:12px; color:#777; margin-top:16px;">
+            CardScope by Shomuran Services• Weston, FL 33327
+          </p>
+        </body>
+        </html>
+        """.formatted(user.getName(), resetLink);
+
+            helper.setText(html, true); // true => HTML content
+            mailSender.send(message);
+
+        } catch (MessagingException e) {
+            throw new RuntimeException("Failed to send reset email", e);
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void confirmResetPassword(String token, String newPassword) {
