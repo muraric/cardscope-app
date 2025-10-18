@@ -1,5 +1,6 @@
 package com.shomuran.cardscope.controller;
 
+import com.shomuran.cardscope.dto.UserProfileDto;
 import com.shomuran.cardscope.model.PasswordResetToken;
 import com.shomuran.cardscope.model.UserProfile;
 import com.shomuran.cardscope.repository.PasswordResetTokenRepository;
@@ -92,5 +93,4 @@ public class AuthController {
         userService.confirmResetPassword(token, newPassword);
         return ResponseEntity.ok(Map.of("message", "Password reset successful"));
     }
-
 }

@@ -63,12 +63,42 @@ public class UserProfileController {
 
     // Create a profile
     @PostMapping
-    public ResponseEntity<?> createUser(@RequestBody UserProfile userProfile) {
-        if (userProfileRepository.existsByEmail(userProfile.getEmail())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "User already exists"));
+    public ResponseEntity<?> createUser(@RequestBody Map<String, Object> payload) {
+        String email = (String) payload.get("email");
+        String name = (String) payload.get("name");
+        String passwordHash = (String) payload.get("passwordHash");
+        String provider = (String) payload.getOrDefault("provider", "local");
+        String providerId = (String) payload.get("providerId");
+
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
         }
-        return ResponseEntity.ok(userProfileRepository.save(userProfile));
+
+        // If user already exists, just return it (Google sign-in should be idempotent)
+        UserProfile existing = userProfileRepository.findByEmail(email).orElse(null);
+        if (existing != null) {
+            return ResponseEntity.ok(existing);
+        }
+
+        UserProfile newUser = new UserProfile();
+        newUser.setEmail(email);
+        newUser.setName(name != null ? name : "");
+        newUser.setUserCards(new ArrayList<>());
+
+        // ✅ Differentiate between local signup and Google signup
+        if ("google".equalsIgnoreCase(provider)) {
+            newUser.setPasswordHash(null); // Google users don't need password
+            newUser.setProvider("google");
+            newUser.setProviderId(providerId);
+        } else {
+            newUser.setPasswordHash(passwordHash); // your normal signup flow
+            newUser.setProvider("local");
+        }
+
+        UserProfile saved = userProfileRepository.save(newUser);
+        return ResponseEntity.ok(saved);
     }
+
 
     /**
      * ✅ Updated PUT mapping to use UPSERT logic for CreditCard.
