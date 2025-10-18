@@ -53,7 +53,7 @@ public class UserService {
         // 5️⃣ Send email
         SimpleMailMessage mailMessage = new SimpleMailMessage();
         mailMessage.setTo(email);
-        mailMessage.setFrom("noreply@cardscope.app");
+        mailMessage.setFrom("noreply@shomuran.com");
         mailMessage.setSubject("Password Reset Request - CardScope");
         mailMessage.setText("""
                 Hello %s,
