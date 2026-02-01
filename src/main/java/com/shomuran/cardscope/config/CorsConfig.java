@@ -22,6 +22,7 @@ public class CorsConfig {
             "https://cardcompass.app",
             "https://www.cardcompass.app",
             "https://cardscope-app.onrender.com",
+            "https://cardcompass-web.vercel.app",  // Vercel deployment
             "capacitor://localhost",  // iOS Capacitor app
             "http://localhost"        // Android Capacitor app
         ));
