@@ -8,6 +8,7 @@ import com.shomuran.cardscope.model.UserCard;
 import com.shomuran.cardscope.model.UserProfile;
 import com.shomuran.cardscope.repository.CreditCardRepository;
 import com.shomuran.cardscope.repository.UserProfileRepository;
+import com.shomuran.cardscope.repository.PasswordResetTokenRepository;
 import com.shomuran.cardscope.service.RewardDetailService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -37,6 +38,9 @@ public class UserProfileController {
 
     @Autowired
     private CreditCardRepository creditCardRepository;
+
+    @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -250,14 +254,19 @@ public class UserProfileController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ✅ Delete profile (UNCHANGED)
+    // ✅ Delete profile and all related data
     @DeleteMapping("/{email}")
     public ResponseEntity<?> deleteByEmail(@PathVariable String email) {
         return userProfileRepository.findByEmail(email)
                 .map(profile -> {
+                    // First, delete password reset tokens
+                    passwordResetTokenRepository.deleteByUser(profile);
+                    // Then delete the user profile (user_cards will be deleted automatically via @ElementCollection)
                     userProfileRepository.delete(profile);
+                    log.info("Deleted user and all related data for email: {}", email);
                     return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+
 }
