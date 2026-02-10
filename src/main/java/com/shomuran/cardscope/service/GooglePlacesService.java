@@ -134,20 +134,16 @@ public class GooglePlacesService {
         }
 
         // Fallback: Check database for store name and category mapping
-        System.out.println("Checking database for store: " + storeName);
         try {
             Optional<Store> storeOpt = storeRepository.findByStoreNameIgnoreCase(storeName);
             if (storeOpt.isPresent()) {
                 Store store = storeOpt.get();
                 String dbCategory = store.getCategory();
-                System.out.println("✓ Found store in database: " + storeName + " -> " + dbCategory);
+                System.out.println("Found store in database: " + storeName + " -> " + dbCategory);
                 return dbCategory;
-            } else {
-                System.out.println("✗ Store not found in database: " + storeName);
             }
         } catch (Exception e) {
             System.err.println("Error querying database for store: " + storeName + " - " + e.getMessage());
-            e.printStackTrace();
         }
 
         // Final fallback
