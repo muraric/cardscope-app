@@ -3,6 +3,9 @@ package com.shomuran.cardscope.service;
 import com.shomuran.cardscope.dto.NearbySearchRequest;
 import com.shomuran.cardscope.dto.NearbySearchResponse;
 import com.shomuran.cardscope.dto.StoreInfo;
+import com.shomuran.cardscope.model.Store;
+import com.shomuran.cardscope.repository.StoreRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -13,12 +16,16 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class GooglePlacesService {
 
     @Value("${google.api.key}")
     private String googleApiKey;
+
+    @Autowired
+    private StoreRepository storeRepository;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private static final String PLACES_API_URL = "https://places.googleapis.com/v1/places:searchNearby";
@@ -94,6 +101,11 @@ public class GooglePlacesService {
     }
 */
     public String getCategoryForStore(String storeName) {
+        if (storeName == null || storeName.isEmpty()) {
+            return "general";
+        }
+
+        // First, try Google Places API
         try {
             String url = String.format(
                     "https://maps.googleapis.com/maps/api/place/textsearch/json?query=%s&key=%s",
@@ -103,21 +115,39 @@ public class GooglePlacesService {
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             List<Map<String, Object>> results = (List<Map<String, Object>>) response.get("results");
 
-            if (results == null || results.isEmpty()) return "general";
+            if (results != null && !results.isEmpty()) {
+                // Take first match
+                Map<String, Object> firstResult = results.get(0);
+                List<String> types = (List<String>) firstResult.get("types");
 
-            // Take first match
-            Map<String, Object> firstResult = results.get(0);
-            List<String> types = (List<String>) firstResult.get("types");
-
-            if (types != null && !types.isEmpty()) {
-                return types.get(0); // return the first type as category
+                if (types != null && !types.isEmpty()) {
+                    String googleCategory = types.get(0);
+                    // If Google returns a valid category (not "general"), use it
+                    if (!"general".equals(googleCategory) && !"establishment".equals(googleCategory)) {
+                        return googleCategory;
+                    }
+                }
             }
-
-            return "general";
         } catch (Exception e) {
-            e.printStackTrace();
-            return "general";
+            System.err.println("Error calling Google Places API for store: " + storeName + " - " + e.getMessage());
+            // Continue to database fallback
         }
+
+        // Fallback: Check database for store name and category mapping
+        try {
+            Optional<Store> storeOpt = storeRepository.findByStoreNameIgnoreCase(storeName);
+            if (storeOpt.isPresent()) {
+                Store store = storeOpt.get();
+                String dbCategory = store.getCategory();
+                System.out.println("Found store in database: " + storeName + " -> " + dbCategory);
+                return dbCategory;
+            }
+        } catch (Exception e) {
+            System.err.println("Error querying database for store: " + storeName + " - " + e.getMessage());
+        }
+
+        // Final fallback
+        return "general";
     }
 
     public NearbySearchResponse detectNearestStorev2(double latitude, double longitude) {
